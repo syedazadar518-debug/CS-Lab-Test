@@ -1,65 +1,81 @@
 import streamlit as st
-import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter
 
 # --- Page Config ---
-st.set_page_config(page_title="Pro Face Detector", layout="wide")
+st.set_page_config(page_title="AI Vision Lab", layout="wide")
 
-st.title("🎯 Multi-Face AI Detector")
+st.title("🎨 AI Pixel Vision Lab")
+st.write("Explore how Computer Vision 'sees' images through different processing filters.")
 
-# --- Sidebar for Tuning ---
-st.sidebar.header("Model Tuning")
-# Scale factor ko 1.05 ya 1.1 rakhein taakay chote faces bhi milain
-sf = st.sidebar.slider("Sensitivity (Scale Factor)", 1.01, 1.50, 1.1, 0.01)
-mn = st.sidebar.slider("Min Neighbors", 1, 10, 4)
+# --- Sidebar ---
+st.sidebar.header("Filter Settings")
+mode = st.sidebar.selectbox(
+    "Select Vision Mode", 
+    ["Original", "Grayscale", "Edge Detection", "Pencil Sketch", "Heatmap (Fake)", "Blur Vision"]
+)
 
-def detect_faces(image):
-    # Image ko process karne ke liye format set karein
-    img_array = np.array(image.convert('RGB'))
-    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+# --- Logic Functions ---
+def apply_filter(img, mode):
+    if mode == "Grayscale":
+        return ImageOps.grayscale(img)
     
-    # Pre-trained model load karein
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    elif mode == "Edge Detection":
+        # Computer Vision ka basic principle: Finding boundaries
+        return img.convert("L").filter(ImageFilter.FIND_EDGES)
     
-    # Detection logic: scaleFactor ko adjust karne se multiple faces milte hain
-    faces = face_cascade.detectMultiScale(
-        gray, 
-        scaleFactor=sf, 
-        minNeighbors=mn, 
-        minSize=(30, 30)
-    )
-    
-    annotated_image = img_array.copy()
-    for (x, y, w, h) in faces:
-        # Draw box
-        cv2.rectangle(annotated_image, (x, y), (x+w, y+h), (0, 255, 0), 4)
-        
-    return annotated_image, len(faces)
+    elif mode == "Pencil Sketch":
+        # Gray -> Blur -> Invert -> Dodge
+        gray = ImageOps.grayscale(img)
+        inverted = ImageOps.invert(gray)
+        blurred = inverted.filter(ImageFilter.GaussianBlur(radius=5))
+        final = Image.blend(gray, blurred, alpha=0.5)
+        return final
+
+    elif mode == "Blur Vision":
+        return img.filter(ImageFilter.GaussianBlur(radius=10))
+
+    elif mode == "Heatmap (Fake)":
+        # Convert to grayscale then apply a 'Hot' look
+        gray = ImageOps.grayscale(img)
+        return ImageOps.colorize(gray, black="blue", white="red")
+
+    return img
 
 # --- UI Layout ---
-tab1, tab2 = st.tabs(["📤 Upload Image", "📸 Live Camera"])
+uploaded_file = st.file_uploader("Upload an image to transform...", type=['jpg', 'jpeg', 'png'])
 
-with tab1:
-    uploaded_file = st.file_uploader("Upload Image Here", type=['jpg', 'jpeg', 'png'])
-    if uploaded_file:
-        img = Image.open(uploaded_file)
-        # Force processing on upload
-        res_img, count = detect_faces(img)
+if uploaded_file:
+    # Load Image
+    img = Image.open(uploaded_file)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Source Image")
+        st.image(img, use_container_width=True)
         
-        c1, c2 = st.columns(2)
-        c1.image(img, caption="Original", use_container_width=True)
-        c2.image(res_img, caption=f"Detected: {count} faces", use_container_width=True)
+    with st.spinner(f"Applying {mode}..."):
+        result = apply_filter(img, mode)
         
-        if count > 0:
-            st.success(f"AI found {count} faces!")
+    with col2:
+        st.subheader(f"{mode} Result")
+        st.image(result, use_container_width=True)
+        
+    # Download Button
+    st.sidebar.markdown("---")
+    st.sidebar.download_button("Download Result", data=uploaded_file, file_name="transformed.png")
 
-with tab2:
-    cam_file = st.camera_input("Take a photo")
-    if cam_file:
-        img_cam = Image.open(cam_file)
-        res_cam, count_cam = detect_faces(img_cam)
-        st.image(res_cam, caption=f"Detected: {count_cam} faces")
+else:
+    st.info("Please upload an image to see the AI Vision magic.")
+
+# --- Footer Info for CS Students ---
+with st.expander("How this works (CS Logic)"):
+    st.write("""
+        * **Grayscale:** Luma transformation using `Y = 0.299R + 0.587G + 0.114B`.
+        * **Edge Detection:** Sobel/Prewitt operator logic filters out low-frequency pixels.
+        * **Pencil Sketch:** Uses Gaussian Blur and Color Blending to simulate hand-drawn art.
+    """)
 
 st.markdown("---")
-st.caption("Tip: Agar upload mein faces detect nahi ho rahay, to Sidebar se 'Sensitivity' ko 1.05 ya 1.1 par set karein.")
+st.caption("Pure Python | No Heavy Models | 100% Stability")
